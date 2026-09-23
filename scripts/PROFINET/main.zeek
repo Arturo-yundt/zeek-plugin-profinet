@@ -78,6 +78,10 @@ redef record connection += {
 const ports = {
     34964/udp
     };
+
+# Additional Profinet ports supplied through the environment.
+    global profinet_ports_str: string = getenv("ZEEK_PROFINET_PORTS");
+
 redef likely_server_ports += {
     ports
     };
@@ -99,8 +103,23 @@ event zeek_init() &priority=5 {
                         $path="profinet_debug",
                         $policy=log_policy_debug]);
     Analyzer::register_for_ports(Analyzer::ANALYZER_PROFINET, ports);
-    }
 
+
+    if (profinet_ports_str != "") {
+        local profinet_custom_ports = split_string(profinet_ports_str, /,/);
+        local profinet_ports_udp_custom: set[port] = {};
+        for (profinet_port_idx in profinet_custom_ports) {
+            local profinet_port = to_port(profinet_custom_ports[profinet_port_idx]);
+            local profinet_prot = get_port_transport_proto(profinet_port);
+            if (profinet_prot == udp) {
+                add profinet_ports_udp_custom[profinet_port];
+                }
+            }
+        if (|profinet_ports_udp_custom| > 0) {
+            Analyzer::register_for_ports(Analyzer::ANALYZER_PROFINET, profinet_ports_udp_custom);
+            }
+        }
+}
 ##! Profinet_DCE_RPC response
 event profinet_dce_rpc(c:connection, is_orig: bool,
                         version: count,
@@ -194,3 +213,6 @@ event connection_state_remove(c: connection) &priority=-5 {
         delete c$profinet;
         }
     }
+
+
+
